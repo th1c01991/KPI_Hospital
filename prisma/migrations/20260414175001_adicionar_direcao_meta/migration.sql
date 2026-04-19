@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Indicador" ADD COLUMN     "direcao" TEXT NOT NULL DEFAULT 'MENOR_MELHOR';

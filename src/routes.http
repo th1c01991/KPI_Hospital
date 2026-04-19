@@ -1,0 +1,82 @@
+# - Variaveis de teste - #
+@meuHospital = f40d77f0-3cd8-4244-95b1-e2b28ff318e7
+@usuarioThiago = eff47f10-6a67-46f8-88dd-7f3edc3e25d9
+@setorUtiAdulto = 710ca225-7293-445e-b200-6018df58a23d
+
+@indicadorTaxaOcupacao = 2416e827-2a2b-49f8-a1d0-f75e84140e16
+
+@indicadorTxOcupaUTIAdulto = b47f4003-e9b9-4e25-ae1b-3cd9a2d7107e
+
+
+### 1. Criar um novo Hospital
+POST http://localhost:3000/hospitais
+Content-Type: application/json
+
+{
+  "nome": "Complexo Américas",
+  "cnpj": "11111111000112"
+}
+
+###
+
+### 2. Criar novo usuário
+POST http://localhost:3000/usuarios
+Content-Type: application/json
+
+{
+  "nome": "Thiago Doria Rego",
+  "email": "thiagodoria@gmail.com",
+  "password": "123456",
+  "hospitalId": "f40d77f0-3cd8-4244-95b1-e2b28ff318e7"
+}
+
+###
+
+### 3. Criar um novo Setor
+POST http://localhost:3000/setores
+Content-Type: application/json
+
+{
+  "nome": "Unidade de Internação Adulto",
+  "hospitalId": "{{meuHospital}}"
+}
+
+###
+
+### 4. Criar um novo Indicador (Geral)
+POST http://localhost:3000/indicadores
+Content-Type: application/json
+
+{
+  "nome": "Taxa de ocupação",
+  "descricao": "Porcentagem de leitos ocupados em relação ao total disponível.",
+  "multiplicador": 100,
+  "direcaoMeta": "MAIOR_MELHOR",
+  "hospitalId": "f40d77f0-3cd8-4244-95b1-e2b28ff318e7"
+}
+
+###
+
+### 5. Criar indicador para o Setor
+POST http://localhost:3000/indicadores-setores
+Content-Type: application/json
+
+{
+  "metaSetor": 90,
+  "setorId": "{{setorUtiAdulto}}",
+  "indicadorId": "{{indicadorTaxaOcupacao}}",
+  "hospitalId": "{{meuHospital}}"
+}
+
+###
+
+POST http://localhost:3000/registros
+Content-Type: application/json
+
+{
+  "valor": 85,
+  "data": "2024-06-01",
+  "setorId": "{{setorUtiAdulto}}",
+  "indicadorId": "{{indicadorTaxaOcupacao}}",
+  "hospitalId": "{{meuHospital}}"
+}

@@ -1,0 +1,110 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// A nossa primeira tabela oficial
+// ... suas configurações do generator e datasource continuam aqui em cima ...
+
+model Hospital {
+  id                      String      @id @default(uuid())
+  nome                    String
+  cnpj                    String
+  setores                 Setor[]
+  setores_indicadores     Indicador_Setor[]
+  registros_Diarios       Registro[]
+  variaveis_Operacionais  VariavelOperacional[]  // Ex: "Taxa de Ocupação" ou "Número de Leitos Disponíveis"
+  usuarios                User[]      // Relacionamento com usuários (Quem tem acesso a este hospital?)
+  indicadores             Indicador[]  // Relacionamento com indicadores (Quais indicadores este hospital tem?)
+
+@@unique([id, nome, cnpj]) // Garante que não tenhamos dois hospitais com o mesmo nome
+}
+
+model Setor {
+  id                      String         @id @default(uuid())
+  nome                    String         
+  hospitalId              String        // Chave estrangeira para o Hospital
+  hospital                Hospital       @relation(fields: [hospitalId], references: [id])  // Relacionamento com Hospital (A qual hospital este setor pertence?) 
+  setores_indicadores     Indicador_Setor[]   // Aqui dizemos ao Prisma: "Um setor tem uma lista de indicadores"
+  variaveis_Operacionais  VariavelOperacional[] // Relacionamento com variáveis operacionais (Quais variáveis operacionais estão associadas a este setor?)
+  registros               Registro[] // Relacionamento com registros (Quais registros foram preenchidos para este setor?)
+  @@unique([nome, hospitalId]) // Garante que não tenhamos dois setores com o mesmo nome no mesmo hospital
+}
+
+model Indicador_Setor {
+  id          String        @id @default(uuid())
+  metaSetor   Decimal?      @db.Decimal(10, 2)// A meta específica para este setor e indicador (pode ser diferente da meta geral do indicador)
+  setorId     String        // Chave estrangeira para o Setor
+  indicadorId String        // Chave estrangeira para o Indicador
+  hospitalId  String        // Chave estrangeira para o Hospital (para facilitar consultas e garantir integridade)
+  setor       Setor         @relation(fields: [setorId], references: [id])
+  indicador   Indicador     @relation(fields: [indicadorId], references: [id])
+  hospital    Hospital      @relation(fields: [hospitalId], references: [id])
+
+  @@unique([setorId, indicadorId, hospitalId]) // Garante que um setor não tenha o mesmo indicador mais de uma vez
+}
+
+enum meta {
+  MENOR_MELHOR
+  MAIOR_MELHOR
+}
+
+model Indicador {
+  id                  String        @id @default(uuid())
+  nome                String     // Ex: "Taxa de Infecção Hospitalar" ou "Queda de Leito"
+  descricao           String    // Uma descrição opcional para explicar o que é este indicador
+  multiplicador       Int
+  direcaoMeta         meta          @default(MENOR_MELHOR) // Pode ser MENOR_MELHOR ou MAIOR_MELHOR  
+  hospitalId          String        // Chave estrangeira para o Hospital
+  hospital            Hospital      @relation(fields: [hospitalId], references: [id]) // Relacionamento com Hospital (A qual hospital este indicador pertence?)
+  setores_indicadores Indicador_Setor[]   // Aqui dizemos ao Prisma: "Um indicador tem uma lista de setores que o utilizam"
+  // Lista de dados preenchidos diariamente para este indicador
+  registros           Registro[] 
+
+  @@unique([nome, hospitalId]) // Garante que não tenhamos dois indicadores com o mesmo nome no mesmo setor
+}
+
+model Registro {
+  id            String     @id @default(uuid())
+  dataEvento    DateTime   @db.Date // Pega a data e hora do momento do preenchimento
+  quantidade    Int      // Pode ser a quantidade de quedas, ou uma porcentagem
+  responsavelId String
+  responsavel   User      @relation(fields: [responsavelId], references: [id])  // Chave estrangeira para o User (opcional, pois pode ser preenchido por um usuário que não tem conta ou por um sistema automatizado)
+  justificativa String?    // O ponto de interrogação (?) significa que não é obrigatório preencher sempre
+  hospitalId    String     // Chave estrangeira para o Hospital (para facilitar consultas e garantir integridade)
+  hospital      Hospital   @relation(fields: [hospitalId], references: [id]) //
+  // Relacionamento com Indicador (A qual indicador este dado pertence?)
+  indicadorId   String     // Chave estrangeira para o Indicador (para facilitar consultas e garantir integridade)
+  indicador     Indicador  @relation(fields: [indicadorId], references: [id])
+  setorId       String     // Chave estrangeira para o Setor (para facilitar consultas e garantir integridade)
+  setor         Setor      @relation(fields: [setorId], references: [id])
+
+}
+
+model User {
+  id          String     @id @default(uuid())
+  nome        String
+  email       String     @unique
+  password    String
+  hospitalId  String   // Chave estrangeira para o Hospital (opcional, pois um usuário pode não estar associado a um hospital específico)
+  hospital    Hospital @relation(fields: [hospitalId], references: [id]) // Relacionamento com Hospital (A qual hospital este usuário tem acesso?)
+  registros   Registro[] // Relacionamento com registros (Quais registros este usuário preencheu?)
+
+}
+
+model VariavelOperacional {
+  id          String     @id @default(uuid())
+  nome        String     // Ex: "Taxa de Ocupação" ou "Número de Leitos Disponíveis"
+  valor       Decimal?   @db.Decimal(10, 2) // O valor atual da variável operacional (pode ser atualizado diariamente ou conforme necessário)
+  hospitalId  String     // Chave estrangeira para o Hospital
+  data        DateTime   @db.Date // A data em que o valor foi registrado (pode ser útil para histórico e análises)
+  hospital    Hospital   @relation(fields: [hospitalId], references: [id]) // Relacionamento com Hospital (A qual hospital esta variável operacional pertence?)
+  setorId     String     // Chave estrangeira para o Setor (para facilitar consultas e garantir integridade)
+  setor       Setor      @relation(fields: [setorId], references: [id]) // Relacionamento com Setor (A qual setor esta variável operacional pertence?)
+
+@@unique([id, nome, hospitalId, setorId, data]) // Garante que não tenhamos duas variáveis operacionais com o mesmo nome no mesmo hospital
+}
+
