@@ -74,8 +74,10 @@ POST http://localhost:3000/registros
 Content-Type: application/json
 
 {
-  "valor": 85,
-  "data": "2024-06-01",
+  "quantidade": 85,
+  "dataEvento": "2026-04-19",
+  "responsavelId": "{{usuarioThiago}}",
+  "justificativa": "Justificativa para o registro",
   "setorId": "{{setorUtiAdulto}}",
   "indicadorId": "{{indicadorTaxaOcupacao}}",
   "hospitalId": "{{meuHospital}}"

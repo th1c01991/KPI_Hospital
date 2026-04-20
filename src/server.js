@@ -71,7 +71,8 @@ server.post('/setores', async (request, reply) => {
     const novoSetor = await dataBase.setor.create({
       data: { 
         nome, 
-        hospitalId: String(hospitalId) }
+        hospitalId
+      }
     });
 
     // 2. Você precisa passar essa variável dentro do .send()
@@ -95,9 +96,9 @@ server.post('/indicadores', async (request, reply) => {
       data: {
         nome,
         descricao,
-        multiplicador: parseFloat(multiplicador),
+        multiplicador,
         direcaoMeta,
-        hospitalId: String(hospitalId)
+        hospitalId
       }
     });
 
@@ -113,7 +114,7 @@ server.post('/indicadores', async (request, reply) => {
 });
 
 
-// Rota 4: POST para CRIAR um novo indicador para um setor específico
+// Cadastro de indicador para setor (POST)
 server.post('/indicadores-setores', async (request, reply) => {
   
   try {
@@ -121,9 +122,9 @@ server.post('/indicadores-setores', async (request, reply) => {
 
     const novoIndicadorSetor = await dataBase.indicador_Setor.create({
       data: { 
-        metaSetor: parseFloat(metaSetor),
-        setorId: String(setorId),
-        indicadorId: String(indicadorId),
+        metaSetor,
+        setorId,
+        indicadorId,
         hospitalId
       }
       });
@@ -138,6 +139,32 @@ server.post('/indicadores-setores', async (request, reply) => {
     }
   });
 
+// Cadastro do registro (POST)
+server.post('/registros', async (request, reply) => {
+  try {
+    const { dataEvento, quantidade, responsavelId, justificativa, hospitalId, indicadorId, setorId } = request.body;
+
+    const novoRegistro = await dataBase.registro.create({
+      data: {
+        dataEvento: new Date(dataEvento), // Convertendo a string para um objeto Date
+        quantidade,
+        responsavelId,
+        justificativa,
+        hospitalId,
+        indicadorId,
+        setorId
+      }
+    });
+
+    return reply.status(201).send({
+      mensagem: 'Registro criado com sucesso!',
+      data: novoRegistro
+    });
+  } catch (erro) {
+    console.error(erro);
+    return reply.status(500).send({ erro: 'Erro ao criar registro.' });
+  }
+});
 
 // Rota 2: GET para listar os setores, com opção de busca
 server.get('/setores', async (request, reply) => {
