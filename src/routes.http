@@ -1,20 +1,21 @@
 # - Variaveis de teste - #
-@meuHospital = f40d77f0-3cd8-4244-95b1-e2b28ff318e7
-@usuarioThiago = eff47f10-6a67-46f8-88dd-7f3edc3e25d9
-@setorUtiAdulto = 710ca225-7293-445e-b200-6018df58a23d
+@meuHospital = 456ab755-3e62-4566-87ca-4e6cb87ecbd4
+@usuarioThiago = f45e30a8-e2c6-4e9f-bbc0-e6f03bc7d34c
+@setorUtiAdulto = b27fbd9e-a90e-4089-a521-8c283d0c8d76
 
-@indicadorTaxaOcupacao = 2416e827-2a2b-49f8-a1d0-f75e84140e16
+@indicadorTaxaOcupacao = 35bf276e-2a42-4b75-86b6-356feb0d4664
 
-@indicadorTxOcupaUTIAdulto = b47f4003-e9b9-4e25-ae1b-3cd9a2d7107e
+@indicadorTxOcupaUTIAdulto = 4d669717-7d08-49df-b667-887cc1308a26
 
+@variavelTxOcupacaoUTIAdulto = 2e58e795-ab13-4156-a060-1e3dbc6003e5
 
 ### 1. Criar um novo Hospital
 POST http://localhost:3000/hospitais
 Content-Type: application/json
 
 {
-  "nome": "Complexo Américas",
-  "cnpj": "11111111000112"
+  "nome": "Samaritano Barra",
+  "cnpj": "11111111000111"
 }
 
 ###
@@ -24,10 +25,10 @@ POST http://localhost:3000/usuarios
 Content-Type: application/json
 
 {
-  "nome": "Thiago Doria Rego",
-  "email": "thiagodoria@gmail.com",
+  "nome": "Fernanda Figueiredo Doria",
+  "email": "fernandafigueiredo@gmail.com",
   "password": "123456",
-  "hospitalId": "f40d77f0-3cd8-4244-95b1-e2b28ff318e7"
+  "hospitalId": "{{meuHospital}}"
 }
 
 ###
@@ -37,7 +38,7 @@ POST http://localhost:3000/setores
 Content-Type: application/json
 
 {
-  "nome": "Unidade de Internação Adulto",
+  "nome": "Maternidade",
   "hospitalId": "{{meuHospital}}"
 }
 
@@ -48,11 +49,11 @@ POST http://localhost:3000/indicadores
 Content-Type: application/json
 
 {
-  "nome": "Taxa de ocupação",
-  "descricao": "Porcentagem de leitos ocupados em relação ao total disponível.",
+  "nome": "Taxa de cesareanias",
+  "descricao": "Porcentagem de cesareanias realizadas em relação ao total de partos.",
   "multiplicador": 100,
-  "direcaoMeta": "MAIOR_MELHOR",
-  "hospitalId": "f40d77f0-3cd8-4244-95b1-e2b28ff318e7"
+  "direcaoMeta": "MENOR_MELHOR",
+  "hospitalId": "{{meuHospital}}"
 }
 
 ###
@@ -62,19 +63,19 @@ POST http://localhost:3000/indicadores-setores
 Content-Type: application/json
 
 {
-  "metaSetor": 90,
+  "metaSetor": 20,
   "setorId": "{{setorUtiAdulto}}",
   "indicadorId": "{{indicadorTaxaOcupacao}}",
   "hospitalId": "{{meuHospital}}"
 }
 
-###
+### 6. Registrar evento (Valor do Numerador)
 
 POST http://localhost:3000/registros
 Content-Type: application/json
 
 {
-  "quantidade": 85,
+  "quantidade": 15,
   "dataEvento": "2026-04-19",
   "responsavelId": "{{usuarioThiago}}",
   "justificativa": "Justificativa para o registro",
@@ -82,3 +83,18 @@ Content-Type: application/json
   "indicadorId": "{{indicadorTaxaOcupacao}}",
   "hospitalId": "{{meuHospital}}"
 }
+
+### 7. Registrar a variável operacional (Valor do Denominador)s
+POST http://localhost:3000/variaveis
+Content-Type: application/json
+
+{
+  "nome": "Taxa de cesarianias",
+  "valor": 100,
+  "hospitalId": "{{meuHospital}}",
+  "mes": "2026-04",
+  "setorId": "{{setorUtiAdulto}}"
+}
+
+### 8. Calcular Performance Mensal do Setor
+GET http://localhost:3000/performance?hospitalId={{meuHospital}}&setorId={{setorUtiAdulto}}&indicadorId={{indicadorTaxaOcupacao}}&mes=2026-04

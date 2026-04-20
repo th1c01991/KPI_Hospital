@@ -166,7 +166,124 @@ server.post('/registros', async (request, reply) => {
   }
 });
 
-// Rota 2: GET para listar os setores, com opção de busca
+// Cadastro de variaveis (POST)
+server.post('/variaveis', async (request, reply) => {
+  try {
+    const { nome, valor, hospitalId, mes, setorId } = request.body;
+
+    const novaVariavel = await dataBase.variavelOperacional.create({
+      data: {
+        nome,
+        valor,
+        hospitalId,
+        mes: new Date(mes), // Convertendo a string para um objeto Date
+        setorId
+      }
+    });
+
+    return reply.status(201).send({
+      mensagem: 'Variável criada com sucesso!',
+      data: novaVariavel
+    });
+  } catch (erro) {
+    console.error(erro);
+    return reply.status(500).send({ erro: 'Erro ao criar variável.' });
+  }
+});
+
+// Rota 3
+// Captação de perfermoce dos setores (GET)
+server.get('/performance', {
+  schema: {
+    querystring: {
+      type: 'object',
+      required: ['hospitalId', 'setorId', 'indicadorId', 'mes'],
+      properties: {
+        hospitalId: { type: 'string' },
+        setorId: { type: 'string' },
+        indicadorId: { type: 'string' },
+        mes: { type: 'string', pattern: '^\\d{4}-\\d{2}$' } 
+      }
+    }
+  }
+}, async (request, reply) => {
+  try {
+    const { hospitalId, setorId, indicadorId, mes } = request.query;
+
+    const dataInicio = new Date(`${mes}-01T00:00:00.000Z`);
+    const dataFim = new Date(dataInicio);
+    dataFim.setMonth(dataFim.getMonth() + 1); 
+
+    // 2. Buscar as Regras Fixas
+    const indicador = await dataBase.indicador.findUnique({ where: { id: indicadorId } });
+    
+    // CORREÇÃO 1: findFirst e tirar o metaSetor do where
+    const regraSetor = await dataBase.indicador_Setor.findFirst({
+      where: { setorId, indicadorId, hospitalId } 
+    });
+
+    if (!indicador || !regraSetor) {
+      return reply.status(404).send({ erro: 'Indicador ou Meta não configurados para este setor.' });
+    }
+
+    // 3. Buscar o Denominador 
+    const variavel = await dataBase.variavelOperacional.findFirst({
+      where: {
+        setorId: setorId,
+        hospitalId: hospitalId,
+        mes: { gte: dataInicio, lt: dataFim } 
+      }
+    });
+
+    if (!variavel || variavel.valor === 0) {
+      return reply.status(400).send({ erro: 'Denominador (Variável) não preenchido neste mês.' });
+    }
+
+    const denominador = variavel.valor;
+
+    // 4. Buscar o Numerador 
+    const somaRegistros = await dataBase.registro.aggregate({
+      _sum: { quantidade: true },
+      where: {
+        setorId, indicadorId, hospitalId,
+        dataEvento: { gte: dataInicio, lt: dataFim }
+      }
+    });
+
+    const numerador = somaRegistros._sum.quantidade || 0;
+    const meta = Number(regraSetor.metaSetor); // A meta limpa e convertida
+
+    // 5. O Motor Matemático
+    const performanceAtual = (numerador / denominador) * indicador.multiplicador;
+
+    // 6. O Diagnóstico Final (Decisão)
+    let statusDaMeta = 'INDEFINIDO';
+    
+    // CORREÇÃO 2: Substituir metaSetor por meta nos IFs
+    if (indicador.direcaoMeta === 'MAIOR_MELHOR') {
+      statusDaMeta = performanceAtual >= meta ? 'SUCESSO' : 'ALERTA_VERMELHO';
+    } else if (indicador.direcaoMeta === 'MENOR_MELHOR') {
+      statusDaMeta = performanceAtual <= meta ? 'SUCESSO' : 'ALERTA_VERMELHO';
+    }
+
+    return reply.status(200).send({
+      mesReferencia: mes,
+      indicador: indicador.nome,
+      numeradorAculumado: numerador,
+      denominadorMensal: denominador,
+      performance: performanceAtual.toFixed(2), 
+      metaEsperada: meta,
+      status: statusDaMeta
+    });
+
+  } catch (error) {
+    server.log.error(error);
+    return reply.status(500).send({ erro: 'Erro ao calcular a performance do setor.' });
+  }
+});
+
+
+
 server.get('/setores', async (request, reply) => {
 
   try {

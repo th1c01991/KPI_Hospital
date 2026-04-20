@@ -20,7 +20,7 @@ model Hospital {
   usuarios                User[]      // Relacionamento com usuários (Quem tem acesso a este hospital?)
   indicadores             Indicador[]  // Relacionamento com indicadores (Quais indicadores este hospital tem?)
 
-@@unique([id, nome, cnpj]) // Garante que não tenhamos dois hospitais com o mesmo nome
+@@unique([cnpj]) // Garante que não tenhamos dois hospitais com o mesmo nome
 }
 
 model Setor {
@@ -93,6 +93,7 @@ model User {
   hospital    Hospital @relation(fields: [hospitalId], references: [id]) // Relacionamento com Hospital (A qual hospital este usuário tem acesso?)
   registros   Registro[] // Relacionamento com registros (Quais registros este usuário preencheu?)
 
+@@unique([email, nome, hospitalId]) // Garante que não tenhamos dois usuários com o mesmo email
 }
 
 model VariavelOperacional {
@@ -100,11 +101,11 @@ model VariavelOperacional {
   nome        String     // Ex: "Taxa de Ocupação" ou "Número de Leitos Disponíveis"
   valor       Decimal?   @db.Decimal(10, 2) // O valor atual da variável operacional (pode ser atualizado diariamente ou conforme necessário)
   hospitalId  String     // Chave estrangeira para o Hospital
-  data        DateTime   @db.Date // A data em que o valor foi registrado (pode ser útil para histórico e análises)
+  mes        DateTime   @db.Date // A data em que o valor foi registrado (pode ser útil para histórico e análises)
   hospital    Hospital   @relation(fields: [hospitalId], references: [id]) // Relacionamento com Hospital (A qual hospital esta variável operacional pertence?)
   setorId     String     // Chave estrangeira para o Setor (para facilitar consultas e garantir integridade)
   setor       Setor      @relation(fields: [setorId], references: [id]) // Relacionamento com Setor (A qual setor esta variável operacional pertence?)
 
-@@unique([id, nome, hospitalId, setorId, data]) // Garante que não tenhamos duas variáveis operacionais com o mesmo nome no mesmo hospital
+@@unique([nome, hospitalId, setorId, mes]) // Garante que não tenhamos duas variáveis operacionais com o mesmo nome no mesmo hospital
 }
 
