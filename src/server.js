@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import fastify from 'fastify';
 import cors from '@fastify/cors';
+import jwt from '@fastify/jwt';
+import bcrypt from 'bcryptjs';
 
 // IMPORTANTE: Adicione o .js no final do arquivo!
 import { dataBase } from './dataBase.js'; 
@@ -11,6 +13,57 @@ const server = fastify({ logger: true });
 
 await server.register(cors, { 
   origin: true 
+});
+
+// Registrar o plugin JWT
+await server.register(jwt, {
+  secret: process.env.JWT_SECRET || 'seu_segredo_aqui'
+});
+
+// Middleware de autenticação reutilizável
+server.decorate('autenticar', async (request, reply) => {
+  try {
+    await request.jwtVerify();
+  } catch (err) {
+    return reply.status(401).send({ erro: 'Token inválido ou ausente.' });
+  }
+});
+
+// POST /login
+server.post('/login', async (request, reply) => {
+  try {
+    const { email, password } = request.body;
+
+    const usuario = await dataBase.user.findFirst({
+      where: { email },
+      include: { hospital: true }
+    });
+
+    if (!usuario) {
+      return reply.status(401).send({ erro: 'Credenciais inválidas.' });
+    }
+
+    const senhaCorreta = await bcrypt.compare(password, usuario.password);
+    if (!senhaCorreta) {
+      return reply.status(401).send({ erro: 'Credenciais inválidas.' });
+    }
+
+    const token = server.jwt.sign({
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      hospitalId: usuario.hospitalId,
+      hospitalNome: usuario.hospital.nome
+    }, { expiresIn: '8h' });
+
+    return reply.send({ token, usuario: {
+      nome: usuario.nome,
+      hospitalNome: usuario.hospital.nome
+    }});
+  } catch (erro) {
+    console.error(erro);
+    return reply.status(500).send({ erro: 'Erro ao fazer login.' });
+  }
 });
 
 // Rota 1: INFRAESTRUTURA
@@ -40,18 +93,23 @@ server.post('/hospitais', async (request, reply) => {
 server.post('/usuarios', async (request, reply) => {
   try {
     const { nome, email, password, hospitalId } = request.body;
-
+    const passwordHash = await bcrypt.hash(password, 10);
+    // use passwordHash no lugar de password ao chamar dataBase.user.create(...)
     const novoUsuario = await dataBase.user.create({
         data: {
           nome,
           email,
-          password,
+          password: passwordHash,
           hospitalId
         }
   })
     return reply.status(201).send({
       mensagem: 'Usuário criado com sucesso',
-      data: novoUsuario
+      data: {
+        id: novoUsuario.id,
+        nome: novoUsuario.nome,
+        email: novoUsuario.email
+      }
     });
 
   } catch (erro) {
@@ -118,14 +176,13 @@ server.post('/indicadores', async (request, reply) => {
 server.post('/indicadores-setores', async (request, reply) => {
   
   try {
-    const { metaSetor, setorId, indicadorId, hospitalId } = request.body;
+    const { metaSetor, setorId, indicadorId } = request.body;
 
     const novoIndicadorSetor = await dataBase.indicador_Setor.create({
       data: { 
         metaSetor,
         setorId,
-        indicadorId,
-        hospitalId
+        indicadorId
       }
       });
 
@@ -147,12 +204,12 @@ server.post('/registros', async (request, reply) => {
     const novoRegistro = await dataBase.registro.create({
       data: {
         dataEvento: new Date(dataEvento), // Convertendo a string para um objeto Date
-        quantidade,
-        responsavelId,
-        justificativa,
-        hospitalId,
-        indicadorId,
-        setorId
+        quantidade: Number(quantidade), // Garantindo que quantidade seja um número
+        responsavelId: responsavelId,
+        justificativa: justificativa || null, // Permitindo que a justificativa seja opcional
+        hospitalId: hospitalId,
+        indicadorId: indicadorId,
+        setorId: setorId
       }
     });
 
@@ -219,7 +276,7 @@ server.get('/performance', {
     
     // CORREÇÃO 1: findFirst e tirar o metaSetor do where
     const regraSetor = await dataBase.indicador_Setor.findFirst({
-      where: { setorId, indicadorId, hospitalId } 
+      where: { setorId, indicadorId } 
     });
 
     if (!indicador || !regraSetor) {
@@ -239,8 +296,6 @@ server.get('/performance', {
       return reply.status(400).send({ erro: 'Denominador (Variável) não preenchido neste mês.' });
     }
 
-    const denominador = variavel.valor;
-
     // 4. Buscar o Numerador 
     const somaRegistros = await dataBase.registro.aggregate({
       _sum: { quantidade: true },
@@ -250,9 +305,9 @@ server.get('/performance', {
       }
     });
 
-    const numerador = somaRegistros._sum.quantidade || 0;
+    const numerador = Number(somaRegistros._sum.quantidade) || 0;
     const meta = Number(regraSetor.metaSetor); // A meta limpa e convertida
-
+    const denominador = Number(variavel.valor); // O denominador limpo e convertido
     // 5. O Motor Matemático
     const performanceAtual = (numerador / denominador) * indicador.multiplicador;
 
@@ -269,9 +324,10 @@ server.get('/performance', {
     return reply.status(200).send({
       mesReferencia: mes,
       indicador: indicador.nome,
-      numeradorAculumado: numerador,
+      numeradorAcumulado: numerador,
+      nomeDenominador: variavel.nome,
       denominadorMensal: denominador,
-      performance: performanceAtual.toFixed(2), 
+      performance: Number(performanceAtual.toFixed(2)), 
       metaEsperada: meta,
       status: statusDaMeta
     });
@@ -284,18 +340,17 @@ server.get('/performance', {
 
 
 
-server.get('/setores', async (request, reply) => {
-
+// GET /setores — agora protegido e filtrado pelo hospital do usuário logado
+server.get('/setores', { preHandler: [server.autenticar] }, async (request, reply) => {
   try {
-    const listarSetores = await dataBase.setor.findMany({
-      include: {
-        indicadores: { include: {
-          registros: true }
-        },
-      }
+    const { hospitalId } = request.user; // vem do token JWT
+
+    const setores = await dataBase.setor.findMany({
+      where: { hospitalId },
+      orderBy: { nome: 'asc' }
     });
 
-    return reply.status(200).send(listarSetores);
+    return reply.send(setores);
   } catch (erro) {
     console.error(erro);
     return reply.status(500).send({ erro: 'Erro ao buscar setores.' });
@@ -359,6 +414,62 @@ server.delete('/setores/:id', async (request, reply) => {
   } catch (erro) {
     console.error(erro);
     return reply.status(500).send({ erro: 'Não foi possível excluir o setor.' });
+  }
+});
+
+// Rota 4: Captação do Histórico (Últimos 6 meses)
+server.get('/historico', async (request, reply) => {
+  try {
+    const { hospitalId, setorId, indicadorId } = request.query;
+
+    const hoje = new Date();
+    const historico = [];
+
+    // Loop para buscar os últimos 6 meses (de trás para a frente)
+    for (let i = 5; i >= 0; i--) {
+      const dataBusca = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const mesFormatado = dataBusca.toISOString().slice(0, 7); // Ex: "2026-04"
+      
+      const dataInicio = new Date(dataBusca.getFullYear(), dataBusca.getMonth(), 1);
+      const dataFim = new Date(dataBusca.getFullYear(), dataBusca.getMonth() + 1, 1);
+
+      // 1. Soma os registros do mês
+      const soma = await dataBase.registro.aggregate({
+        _sum: { quantidade: true },
+        where: {
+          setorId, indicadorId, hospitalId,
+          dataEvento: { gte: dataInicio, lt: dataFim }
+        }
+      });
+
+      // 2. Busca o denominador daquele mês específico
+      const variavel = await dataBase.variavelOperacional.findFirst({
+        where: {
+          setorId, hospitalId,
+          mes: { gte: dataInicio, lt: dataFim }
+        }
+      });
+
+      const numerador = Number(soma._sum.quantidade || 0);
+      const denominador = variavel ? Number(variavel.valor) : null;
+      
+      let performance = 0;
+      if (denominador && denominador > 0) {
+        // Multiplicando por 1000 assumindo que é a taxa de IPCS
+        performance = Number(((numerador / denominador) * 1000).toFixed(2));
+      }
+
+      historico.push({
+        mes: mesFormatado,
+        performance: performance,
+        incompleto: !variavel 
+      });
+    }
+
+    return reply.status(200).send(historico);
+  } catch (error) {
+    server.log.error(error);
+    return reply.status(500).send({ erro: 'Erro ao buscar histórico.' });
   }
 });
 

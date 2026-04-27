@@ -4,7 +4,9 @@
   "description": "",
   "main": "src/server.js",
   "scripts": {
-    "dev": "node --watch ./src/server.js"
+    "dev:backend": "node --watch src/server.js",
+    "dev:frontend": "npm run dev --prefix telakpi",
+    "dev": "concurrently -n BACKEND,FRONTEND -c magenta,cyan \"npm run dev:backend\" \"npm run dev:frontend\""
   },
   "keywords": [],
   "author": "",
@@ -12,13 +14,16 @@
   "type": "module",
   "dependencies": {
     "@fastify/cors": "^11.2.0",
+    "@fastify/jwt": "^10.0.0",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
+    "bcryptjs": "^3.0.3",
     "fastify": "^5.8.4",
     "pg": "^8.20.0"
   },
   "devDependencies": {
     "@prisma/config": "^7.7.0",
+    "concurrently": "^9.2.1",
     "dotenv": "^17.4.2",
     "prisma": "^7.7.0"
   }

@@ -14,7 +14,6 @@ model Hospital {
   nome                    String
   cnpj                    String
   setores                 Setor[]
-  setores_indicadores     Indicador_Setor[]
   registros_Diarios       Registro[]
   variaveis_Operacionais  VariavelOperacional[]  // Ex: "Taxa de Ocupação" ou "Número de Leitos Disponíveis"
   usuarios                User[]      // Relacionamento com usuários (Quem tem acesso a este hospital?)
@@ -22,6 +21,19 @@ model Hospital {
 
 @@unique([cnpj]) // Garante que não tenhamos dois hospitais com o mesmo nome
 }
+
+model User {
+  id          String     @id @default(uuid())
+  nome        String
+  email       String
+  password    String
+  hospitalId  String   // Chave estrangeira para o Hospital (opcional, pois um usuário pode não estar associado a um hospital específico)
+  hospital    Hospital @relation(fields: [hospitalId], references: [id]) // Relacionamento com Hospital (A qual hospital este usuário tem acesso?)
+  registros   Registro[] // Relacionamento com registros (Quais registros este usuário preencheu?)
+
+@@unique([email, hospitalId]) // Garante que não tenhamos dois usuários com o mesmo email
+}
+
 
 model Setor {
   id                      String         @id @default(uuid())
@@ -39,12 +51,10 @@ model Indicador_Setor {
   metaSetor   Decimal?      @db.Decimal(10, 2)// A meta específica para este setor e indicador (pode ser diferente da meta geral do indicador)
   setorId     String        // Chave estrangeira para o Setor
   indicadorId String        // Chave estrangeira para o Indicador
-  hospitalId  String        // Chave estrangeira para o Hospital (para facilitar consultas e garantir integridade)
   setor       Setor         @relation(fields: [setorId], references: [id])
   indicador   Indicador     @relation(fields: [indicadorId], references: [id])
-  hospital    Hospital      @relation(fields: [hospitalId], references: [id])
 
-  @@unique([setorId, indicadorId, hospitalId]) // Garante que um setor não tenha o mesmo indicador mais de uma vez
+  @@unique([setorId, indicadorId]) // Garante que um setor não tenha o mesmo indicador mais de uma vez
 }
 
 enum meta {
@@ -63,8 +73,6 @@ model Indicador {
   setores_indicadores Indicador_Setor[]   // Aqui dizemos ao Prisma: "Um indicador tem uma lista de setores que o utilizam"
   // Lista de dados preenchidos diariamente para este indicador
   registros           Registro[] 
-
-  @@unique([nome, hospitalId]) // Garante que não tenhamos dois indicadores com o mesmo nome no mesmo setor
 }
 
 model Registro {
@@ -84,28 +92,17 @@ model Registro {
 
 }
 
-model User {
-  id          String     @id @default(uuid())
-  nome        String
-  email       String     @unique
-  password    String
-  hospitalId  String   // Chave estrangeira para o Hospital (opcional, pois um usuário pode não estar associado a um hospital específico)
-  hospital    Hospital @relation(fields: [hospitalId], references: [id]) // Relacionamento com Hospital (A qual hospital este usuário tem acesso?)
-  registros   Registro[] // Relacionamento com registros (Quais registros este usuário preencheu?)
-
-@@unique([email, nome, hospitalId]) // Garante que não tenhamos dois usuários com o mesmo email
-}
 
 model VariavelOperacional {
   id          String     @id @default(uuid())
   nome        String     // Ex: "Taxa de Ocupação" ou "Número de Leitos Disponíveis"
   valor       Decimal?   @db.Decimal(10, 2) // O valor atual da variável operacional (pode ser atualizado diariamente ou conforme necessário)
   hospitalId  String     // Chave estrangeira para o Hospital
-  mes        DateTime   @db.Date // A data em que o valor foi registrado (pode ser útil para histórico e análises)
+  mes         DateTime   @db.Date // A data em que o valor foi registrado (pode ser útil para histórico e análises)
   hospital    Hospital   @relation(fields: [hospitalId], references: [id]) // Relacionamento com Hospital (A qual hospital esta variável operacional pertence?)
   setorId     String     // Chave estrangeira para o Setor (para facilitar consultas e garantir integridade)
   setor       Setor      @relation(fields: [setorId], references: [id]) // Relacionamento com Setor (A qual setor esta variável operacional pertence?)
 
-@@unique([nome, hospitalId, setorId, mes]) // Garante que não tenhamos duas variáveis operacionais com o mesmo nome no mesmo hospital
+@@unique([ hospitalId, setorId, mes]) // Garante que não tenhamos duas variáveis operacionais com o mesmo nome no mesmo hospital
 }
 
